@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WrapBack</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎧</text></svg>">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+
+  <style>
+    body {
+      background-color: #08090c;
+      color: #ffffff;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .wrapped-year-badge {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      -webkit-text-stroke: 2.4px #000000;
+      color: #FF3020;
+    }
+
+    .hypnotic-circles {
+      background: repeating-radial-gradient(
+        circle at 85% 30%,
+        #000000 0,
+        #000000 13px,
+        #ffffff 14px,
+        #ffffff 26px
+      );
+    }
+
+    .aurora-2024 {
+      background:
+        radial-gradient(circle at 50% 20%, #0044ff 0%, #00f0ff 35%, transparent 70%),
+        radial-gradient(circle at 80% 40%, #7000ff 0%, transparent 50%),
+        #050508;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-start py-8 px-4">
+
+  <header class="text-center mb-6 max-w-xl px-2">
+    <h1 class="text-4xl sm:text-5xl font-black tracking-tight text-white">
+      WRAP<span class="text-emerald-400">BACK</span>
+    </h1>
+    <p class="text-xs sm:text-sm text-neutral-400 mt-1 text-balance">
+      Upload your Spotify listening history and revisit your stats in the style of past years.
+    </p>
+  </header>
+
+  <div id="dropZone" class="w-full max-w-md bg-neutral-900/90 border-2 border-dashed border-neutral-700 hover:border-emerald-400 rounded-3xl p-6 text-center transition-all cursor-pointer mb-6 shadow-2xl">
+    <input id="fileInput" type="file" accept=".json" multiple class="hidden" />
+    <div class="w-12 h-12 bg-neutral-800 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-3">
+      📂
+    </div>
+    <h2 class="text-base font-bold text-white mb-1">1. Drop your JSON files here</h2>
+    <p class="text-xs text-neutral-400 max-w-xs mx-auto mb-4">
+      Files named <code class="text-emerald-400 bg-black/60 px-1 py-0.5 rounded">Streaming_History_Audio_*.json</code>
+    </p>
+    <button class="bg-emerald-400 hover:bg-emerald-300 text-black font-extrabold text-xs px-5 py-2.5 rounded-full shadow-lg pointer-events-none">
+      Select from your device
+    </button>
+  </div>
+
+  <div id="yearSelectionContainer" class="hidden w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl p-4 mb-6 text-center shadow-xl">
+    <p class="text-xs font-bold text-neutral-400 mb-2.5">2. Click a year to update the design and stats:</p>
+    <div id="yearsPills" class="flex flex-wrap items-center justify-center gap-2"></div>
+  </div>
+
+  <div id="resultSection" class="hidden flex flex-col items-center">
+    <div id="wrappedCard" class="w-[340px] sm:w-[360px] h-[640px] rounded-[32px] overflow-hidden shadow-2xl relative select-none"></div>
+
+    <button id="btnDownload" class="mt-6 bg-emerald-400 hover:bg-emerald-300 text-black font-black text-sm px-8 py-3 rounded-full flex items-center gap-2 shadow-2xl transition-transform active:scale-95">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+      </svg>
+      Download Card for Instagram Stories (PNG)
+    </button>
+  </div>
+
+  <script>
+    let rawRecords = [];
+    let selectedYears = new Set();
+    let renderVersion = 0;
+
+    const artistImageCache = {};
+
+    const defaultPlaceholder = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+        <rect width="600" height="600" fill="#d4d4d4"/>
+        <circle cx="300" cy="235" r="105" fill="#777"/>
+        <path d="M115 525c25-125 100-180 185-180s160 55 185 180" fill="#777"/>
+      </svg>
+    `)}`;
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const yearSelectionContainer = document.getElementById('yearSelectionContainer');
+    const yearsPills = document.getElementById('yearsPills');
+    const resultSection = document.getElementById('resultSection');
+    const wrappedCard = document.getElementById('wrappedCard');
+    const btnDownload = document.getElementById('btnDownload');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-emerald-400', 'bg-neutral-800');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('border-emerald-400', 'bg-neutral-800');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-emerald-400', 'bg-neutral-800');
+      if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) handleFiles(e.target.files);
+    });
+
+    async function handleFiles(files) {
+      rawRecords = [];
+      renderVersion++;
+
+      for (const file of Array.from(files)) {
+        try {
+          const text = await file.text();
+          const json = JSON.parse(text);
+
+          if (!Array.isArray(json)) continue;
+
+          json.forEach(item => {
+            const track = item.trackName || item.master_metadata_track_name;
+            const artist = item.artistName || item.master_metadata_album_artist_name;
+            const ms = item.msPlayed ?? item.ms_played ?? 0;
+            const dateStr = item.endTime || item.ts;
+
+            if (!track || !artist || !dateStr) return;
+
+            const normalizedDate = String(dateStr).includes('T')
+              ? String(dateStr)
+              : String(dateStr).replace(' ', 'T');
+
+            const parsedDate = new Date(normalizedDate);
+
+            if (!isNaN(parsedDate.getTime())) {
+              rawRecords.push({
+                track: String(track),
+                artist: String(artist),
+                msPlayed: Number(ms) || 0,
+                date: parsedDate
+              });
+            }
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      if (!rawRecords.length) {
+        alert("No valid streaming data found.");
+        return;
+      }
+
+      setupYearsMenu();
+    }
+
+    function setupYearsMenu() {
+      const detectedYears = [
+        ...new Set(rawRecords.map(r => r.date.getFullYear()))
+      ].sort((a, b) => b - a);
+
+      yearsPills.innerHTML = '';
+      selectedYears.clear();
+      selectedYears.add(detectedYears[0]);
+
+      detectedYears.forEach(year => {
+        const btn = document.createElement('button');
+
+        btn.textContent = year;
+        btn.dataset.year = year;
+
+        updatePillStyle(
+          btn,
+          selectedYears.has(year) && selectedYears.size === 1
+        );
+
+        btn.addEventListener('click', () => {
+          selectedYears.clear();
+          selectedYears.add(year);
+          refreshPillsUI(detectedYears);
+          renderActiveWrapped();
+        });
+
+        yearsPills.appendChild(btn);
+      });
+
+      if (detectedYears.length > 1) {
+        const allBtn = document.createElement('button');
+
+        allBtn.textContent = "All Years";
+        allBtn.dataset.year = "ALL";
+
+        updatePillStyle(
+          allBtn,
+          selectedYears.size === detectedYears.length
+        );
+
+        allBtn.addEventListener('click', () => {
+          selectedYears = new Set(detectedYears);
+          refreshPillsUI(detectedYears);
+          renderActiveWrapped();
+        });
+
+        yearsPills.appendChild(allBtn);
+      }
+
+      yearSelectionContainer.classList.remove('hidden');
+      resultSection.classList.remove('hidden');
+
+      renderActiveWrapped();
+    }
+
+    function updatePillStyle(btn, isActive) {
+      btn.className = isActive
+        ? "px-4 py-2 rounded-full text-xs font-black bg-emerald-400 text-black shadow-md transition-all scale-105"
+        : "px-4 py-2 rounded-full text-xs font-bold bg-black text-neutral-400 hover:text-white border border-neutral-800 transition-all";
+    }
+
+    function refreshPillsUI(detectedYears) {
+      yearsPills.querySelectorAll('button').forEach(btn => {
+        if (btn.dataset.year === "ALL") {
+          updatePillStyle(
+            btn,
+            selectedYears.size === detectedYears.length
+          );
+        } else {
+          const year = Number(btn.dataset.year);
+
+          updatePillStyle(
+            btn,
+            selectedYears.has(year) && selectedYears.size === 1
+          );
+        }
+      });
+    }
+
+    async function renderActiveWrapped() {
+      const currentVersion = ++renderVersion;
+
+      const yearsArr = Array.from(selectedYears).sort((a, b) => a - b);
+      const isSingleYear = yearsArr.length === 1;
+      const singleYear = isSingleYear ? yearsArr[0] : null;
+
+      let filteredRecords = rawRecords.filter(
+        r => selectedYears.has(r.date.getFullYear())
+      );
+
+      if (isSingleYear) {
+        const isModern = singleYear >= 2023;
+        const cutoffMonth = isModern ? 10 : 9;
+        const cutoffDay =
+          singleYear >= 2024
+            ? 25
+            : singleYear === 2023
+              ? 18
+              : 31;
+
+        const cutoff = new Date(
+          singleYear,
+          cutoffMonth,
+          cutoffDay,
+          23,
+          59,
+          59,
+          999
+        );
+
+        const withCutoff = filteredRecords.filter(r => r.date <= cutoff);
+
+        if (withCutoff.length >= 5) {
+          filteredRecords = withCutoff;
+        }
+      }
+
+      let totalMs = 0;
+
+      filteredRecords.forEach(r => {
+        totalMs += r.msPlayed;
+      });
+
+      const totalMinutes = Math.round(totalMs / 60000).toLocaleString('en-US');
+
+      const validStreams = filteredRecords.filter(
+        r => r.msPlayed >= 30000
+      );
+
+      const streamSource =
+        validStreams.length >= 5
+          ? validStreams
+          : filteredRecords;
+
+      const artistCounts = {};
+      const trackCounts = {};
+
+      streamSource.forEach(r => {
+        artistCounts[r.artist] = (artistCounts[r.artist] || 0) + 1;
+        trackCounts[r.track] = (trackCounts[r.track] || 0) + 1;
+      });
+
+      const topArtists = Object.entries(artistCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(a => a[0]);
+
+      const topTracks = Object.entries(trackCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(t => t[0]);
+
+      let deducedGenre = "Pop";
+      let primaryArtistImg = defaultPlaceholder;
+
+      try {
+        deducedGenre = await deduceGenre(topArtists, topTracks);
+      } catch (e) {
+        deducedGenre = "Pop";
+      }
+
+      if (currentVersion !== renderVersion) return;
+
+      if (topArtists.length) {
+        try {
+          primaryArtistImg = await getArtistImage(topArtists[0]);
+        } catch (e) {
+          primaryArtistImg = defaultPlaceholder;
+        }
+      }
+
+      if (currentVersion !== renderVersion) return;
+
+      if (singleYear === 2019) {
+        let top5Images = [];
+
+        try {
+          top5Images = await Promise.all(
+            topArtists.map(a => getArtistImage(a))
+          );
+        } catch (e) {
+          top5Images = topArtists.map(() => defaultPlaceholder);
+        }
+
+        if (currentVersion !== renderVersion) return;
+
+        render2019Template(topArtists, top5Images);
+      } else if (singleYear === 2020) {
+        render2020Template(
+          topArtists,
+          topTracks,
+          totalMinutes,
+          deducedGenre,
+          primaryArtistImg
+        );
+      } else if (singleYear === 2023) {
+        render2023Template(
+          topArtists,
+          topTracks,
+          totalMinutes,
+          deducedGenre,
+          primaryArtistImg
+        );
+      } else if (singleYear === 2024) {
+        render2024Template(
+          topArtists,
+          topTracks,
+          totalMinutes,
+          primaryArtistImg
+        );
+      } else {
+        const yearLabel = isSingleYear
+          ? singleYear
+          : yearsArr.length === 2
+            ? `${yearsArr[0].toString().slice(2)}-${yearsArr[1].toString().slice(2)}`
+            : "ALL";
+
+        render2025FallbackTemplate(
+          topArtists,
+          topTracks,
+          totalMinutes,
+          deducedGenre,
+          primaryArtistImg,
+          yearLabel
+        );
+      }
+    }
+
+    function imageHTML(src, classes = "") {
+      const safeSrc = src || defaultPlaceholder;
+
+      return `
+        <img
+          src="${safeSrc}"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"
+          class="${classes}"
+          onerror="this.onerror=null;this.src='${defaultPlaceholder}'"
+          alt=""
+        >
+      `;
+    }
+
+    function render2019Template(artists, images) {
+      wrappedCard.className = "w-[340px] sm:w-[360px] h-[640px] bg-[#E80074] text-[#E8F827] rounded-[32px] p-6 flex flex-col justify-between overflow-hidden shadow-2xl relative select-none border-4 border-black";
+
+      let rowsHTML = "";
+
+      artists.forEach((art, i) => {
+        const img = images[i] || defaultPlaceholder;
+
+        rowsHTML += `
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 bg-black rounded shadow-md overflow-hidden flex-shrink-0 border border-black">
+              ${imageHTML(img, "w-full h-full object-cover")}
+            </div>
+            <span class="text-xl font-black text-black w-4">${i + 1}</span>
+            <span class="text-base font-black truncate text-[#E8F827] tracking-tight">${escapeHTML(art)}</span>
+          </div>
+        `;
+      });
+
+      wrappedCard.innerHTML = `
+        <div>
+          <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-1.5 text-white font-black text-sm">
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                <path d="M4 10v4h2v-4H4zm4-3v10h2V7H8zm4-4v18h2V3h-2zm4 4v10h2V7h-2zm4 3v4h2v-4h-2z"/>
+              </svg>
+              <span>WrapBack</span>
+            </div>
+            <span class="text-xs font-black tracking-widest text-[#E8F827]">2019 IN MUSIC</span>
+          </div>
+
+          <h3 class="text-sm font-black text-black uppercase tracking-wider mb-5">My Top Artists</h3>
+
+          <div class="space-y-3.5">
+            ${rowsHTML}
+          </div>
+        </div>
+
+        <div class="text-center pt-4">
+          <span class="text-[11px] font-black tracking-widest text-black">DADDESA.GITHUB.IO/WRAPBACK</span>
+        </div>
+      `;
+    }
+
+    function render2020Template(artists, tracks, minutes, genre, artistImg) {
+      wrappedCard.className = "w-[340px] sm:w-[360px] h-[640px] bg-gradient-to-b from-[#2B00FF] via-[#8400FF] to-[#FF5E00] p-3 rounded-[32px] overflow-hidden shadow-2xl relative select-none border-4 border-black";
+
+      wrappedCard.innerHTML = `
+        <div class="w-full h-full bg-[#1C00D6] rounded-[24px] p-5 flex flex-col justify-between relative overflow-hidden text-white">
+
+          <div class="relative mx-auto mt-2 w-44 h-44">
+            <div class="absolute inset-0 bg-yellow-300 transform -rotate-3 rounded-lg opacity-80"></div>
+            <div class="absolute inset-0 bg-cyan-400 transform rotate-2 rounded-lg opacity-80"></div>
+            <div class="relative w-full h-full bg-black rounded-lg overflow-hidden border-2 border-white shadow-xl">
+              ${imageHTML(artistImg, "w-full h-full object-cover")}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-xs font-black mt-2">
+            <div>
+              <p class="text-[10px] text-neutral-300 uppercase tracking-wider mb-1">Top Artists</p>
+              <ol class="space-y-1">
+                ${artists.map((a, i) => `<li class="truncate"><span class="text-neutral-400 mr-1">${i + 1}</span>${escapeHTML(a)}</li>`).join('')}
+              </ol>
+            </div>
+
+            <div>
+              <p class="text-[10px] text-neutral-300 uppercase tracking-wider mb-1">Top Songs</p>
+              <ol class="space-y-1">
+                ${tracks.map((t, i) => `<li class="truncate"><span class="text-neutral-400 mr-1">${i + 1}</span>${escapeHTML(t)}</li>`).join('')}
+              </ol>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-2 border-t border-white/20">
+            <div>
+              <p class="text-[9px] uppercase tracking-wider text-neutral-300">Minutes Listened</p>
+              <p class="text-xl font-black text-white">${minutes}</p>
+            </div>
+            <div>
+              <p class="text-[9px] uppercase tracking-wider text-neutral-300">Top Genre</p>
+              <p class="text-base font-black text-white truncate">${escapeHTML(genre)}</p>
+            </div>
+          </div>
+
+          <div class="-mx-5 -mb-5 bg-[#B2FF00] text-black px-4 py-2.5 flex justify-between items-center font-black text-xs">
+            <div class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M4 10v4h2v-4H4zm4-3v10h2V7H8zm4-4v18h2V3h-2zm4 4v10h2V7h-2zm4 3v4h2v-4h-2z"/>
+              </svg>
+              <span>WrapBack</span>
+            </div>
+            <span>#2020WRAPBACK</span>
+          </div>
+
+        </div>
+      `;
+    }
+
+    function render2023Template(artists, tracks, minutes, genre, artistImg) {
+      wrappedCard.className = "w-[340px] sm:w-[360px] h-[640px] bg-[#00D492] text-black rounded-[32px] p-5 flex flex-col justify-between overflow-hidden shadow-2xl relative select-none border-4 border-black";
+
+      wrappedCard.innerHTML = `
+        <div class="absolute top-0 left-0 right-0 h-64 pointer-events-none overflow-hidden">
+          <svg class="absolute -top-6 -right-10 w-64 h-64 opacity-90" viewBox="0 0 200 200" fill="none">
+            <path d="M20,100 C50,20 150,20 180,100 C200,160 80,180 40,130" stroke="url(#paint_rainbow)" stroke-width="26" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="paint_rainbow" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FF3366" />
+                <stop offset="50%" stop-color="#FFCC00" />
+                <stop offset="100%" stop-color="#3366FF" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="absolute top-3 left-3 w-16 h-16 border-2 border-yellow-300 border-dashed rounded opacity-75"></div>
+        </div>
+
+        <div class="relative z-10 mx-auto mt-3 w-48 h-48 bg-neutral-900 border-2 border-black overflow-hidden shadow-[4px_4px_0px_#000]">
+          ${imageHTML(artistImg, "w-full h-full object-cover")}
+          <div class="absolute bottom-1 left-1 bg-white text-black font-mono text-[10px] font-bold px-2 py-0.5 border border-black">
+            WRAPBACK '23
+          </div>
+        </div>
+
+        <div class="relative z-10 grid grid-cols-2 gap-3 mt-4 text-xs font-black">
+          <div>
+            <p class="text-[11px] text-black/70 mb-1">Top Artists</p>
+            <ol class="space-y-1">
+              ${artists.map((a, i) => `<li class="truncate"><span class="text-black/50 mr-1">${i + 1}</span>${escapeHTML(a)}</li>`).join('')}
+            </ol>
+          </div>
+
+          <div>
+            <p class="text-[11px] text-black/70 mb-1">Top Songs</p>
+            <ol class="space-y-1">
+              ${tracks.map((t, i) => `<li class="truncate"><span class="text-black/50 mr-1">${i + 1}</span>${escapeHTML(t)}</li>`).join('')}
+            </ol>
+          </div>
+        </div>
+
+        <div class="relative z-10 grid grid-cols-2 gap-3 pt-3 border-t-2 border-black">
+          <div>
+            <p class="text-[10px] uppercase font-bold text-black/70">Minutes Listened</p>
+            <p class="text-2xl font-black text-black leading-tight">${minutes}</p>
+          </div>
+
+          <div>
+            <p class="text-[10px] uppercase font-bold text-black/70">Top Genre</p>
+            <p class="text-lg font-black text-black truncate leading-tight">${escapeHTML(genre)}</p>
+          </div>
+        </div>
+
+        <div class="relative z-10 flex items-center justify-between pt-2">
+          <div class="flex items-center gap-1 font-black text-xs text-black">
+            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+              <path d="M4 10v4h2v-4H4zm4-3v10h2V7H8zm4-4v18h2V3h-2zm4 4v10h2V7h-2zm4 3v4h2v-4h-2z"/>
+            </svg>
+            <span>WrapBack</span>
+          </div>
+          <span class="text-[11px] font-black text-black">DADDESA.GITHUB.IO/WRAPBACK</span>
+        </div>
+      `;
+    }
+
+    function render2024Template(artists, tracks, minutes, artistImg) {
+      wrappedCard.className = "w-[340px] sm:w-[360px] h-[640px] bg-black text-white rounded-[32px] p-5 flex flex-col justify-between overflow-hidden shadow-2xl relative select-none border-4 border-neutral-900";
+
+      wrappedCard.innerHTML = `
+        <div class="absolute top-0 left-0 right-0 h-80 aurora-2024 pointer-events-none opacity-90"></div>
+
+        <div class="relative z-10 mx-auto mt-6 w-48 h-48 rounded-2xl overflow-hidden border border-white/20 shadow-2xl">
+          ${imageHTML(artistImg, "w-full h-full object-cover grayscale contrast-125")}
+        </div>
+
+        <div class="relative z-10 grid grid-cols-2 gap-3 mt-4 text-xs font-black">
+          <div>
+            <p class="text-[11px] text-neutral-400 mb-1">Top Artists</p>
+            <ol class="space-y-1">
+              ${artists.map((a, i) => `<li class="truncate"><span class="text-neutral-500 mr-1.5 text-[10px]">${i + 1}º</span>${escapeHTML(a)}</li>`).join('')}
+            </ol>
+          </div>
+
+          <div>
+            <p class="text-[11px] text-neutral-400 mb-1">Top Songs</p>
+            <ol class="space-y-1">
+              ${tracks.map((t, i) => `<li class="truncate"><span class="text-neutral-500 mr-1.5 text-[10px]">${i + 1}º</span>${escapeHTML(t)}</li>`).join('')}
+            </ol>
+          </div>
+        </div>
+
+        <div class="relative z-10 pt-3 border-t border-white/10">
+          <p class="text-[10px] font-bold text-neutral-400">Minutes Listened</p>
+          <p class="text-3xl font-black text-white tracking-tight mt-0.5">${minutes}</p>
+        </div>
+
+        <div class="relative z-10 flex items-center justify-between pt-2">
+          <div class="w-6 h-6 rounded-full bg-white text-black flex items-center justify-center">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+              <path d="M4 10v4h2v-4H4zm4-3v10h2V7H8zm4-4v18h2V3h-2zm4 4v10h2V7h-2zm4 3v4h2v-4h-2z"/>
+            </svg>
+          </div>
+          <span class="text-[11px] font-black tracking-wider text-white">DADDESA.GITHUB.IO/WRAPBACK</span>
+        </div>
+      `;
+    }
+
+    function render2025FallbackTemplate(artists, tracks, minutes, genre, artistImg, yearLabel) {
+      wrappedCard.className = "w-[340px] sm:w-[360px] h-[640px] bg-[#F2F1EC] text-black rounded-[32px] p-5 flex flex-col justify-between overflow-hidden shadow-2xl relative select-none border-4 border-black";
+
+      wrappedCard.innerHTML = `
+        <div class="absolute top-0 left-0 right-0 h-[290px] overflow-hidden pointer-events-none">
+          <div class="absolute -top-12 -right-16 w-80 h-80 rounded-full hypnotic-circles opacity-95"></div>
+
+          <div class="absolute -top-3 left-1 z-10">
+            <div class="wrapped-year-badge font-black text-[70px] sm:text-[74px] leading-none tracking-tight select-none">
+              ${escapeHTML(yearLabel)}
+            </div>
+          </div>
+
+          <svg class="absolute top-0 left-0 w-36 h-72 z-20 pointer-events-none" viewBox="0 0 140 280" fill="none" stroke="#000000" stroke-width="2.2" stroke-linecap="round">
+            <path d="M 5 35 Q 80 40 45 100 T 15 170 Q 95 190 20 250" />
+            <path d="M 65 15 Q 15 90 75 140 T 10 220" />
+            <path d="M 30 75 C 90 100, 110 150, 40 185 C 10 210, 80 230, 120 260" />
+          </svg>
+        </div>
+
+        <div class="relative z-20 mt-3 mx-auto w-48 h-48 bg-neutral-300 border-2 border-black shadow-[4px_4px_0px_#000] overflow-hidden">
+          ${imageHTML(artistImg, "w-full h-full object-cover grayscale contrast-125 brightness-95")}
+        </div>
+
+        <div class="relative z-10 grid grid-cols-2 gap-3 mt-4 pt-2">
+          <div>
+            <p class="text-[11px] font-bold text-neutral-600 mb-1.5">Top Artists</p>
+            <ol class="space-y-1 text-xs font-black text-neutral-900 tracking-tight">
+              ${artists.map((a, i) => `
+                <li class="truncate flex items-baseline gap-1.5">
+                  <span class="text-neutral-500 font-extrabold w-3">${i + 1}</span>
+                  <span class="truncate">${escapeHTML(a)}</span>
+                </li>
+              `).join('')}
+            </ol>
+          </div>
+
+          <div>
+            <p class="text-[11px] font-bold text-neutral-600 mb-1.5">Top Songs</p>
+            <ol class="space-y-1 text-xs font-black text-neutral-900 tracking-tight">
+              ${tracks.map((t, i) => `
+                <li class="truncate flex items-baseline gap-1.5">
+                  <span class="text-neutral-500 font-extrabold w-3">${i + 1}</span>
+                  <span class="truncate">${escapeHTML(t)}</span>
+                </li>
+              `).join('')}
+            </ol>
+          </div>
+        </div>
+
+        <div class="relative z-10 grid grid-cols-2 gap-3 pt-3 border-t border-neutral-300/80">
+          <div>
+            <p class="text-[10px] font-bold text-neutral-600">Minutes Listened</p>
+            <p class="text-2xl font-black text-neutral-950 tracking-tight mt-0.5">${minutes}</p>
+          </div>
+
+          <div>
+            <p class="text-[10px] font-bold text-neutral-600">Top Genre</p>
+            <p class="text-xl font-black text-neutral-950 tracking-tight mt-0.5 truncate">${escapeHTML(genre)}</p>
+          </div>
+        </div>
+
+        <div class="relative z-10 flex items-center justify-between pt-2">
+          <div class="w-7 h-7 bg-black rounded-full flex items-center justify-center text-white">
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M4 10v4h2v-4H4zm4-3v10h2V7H8zm4-4v18h2V3h-2zm4 4v10h2V7h-2zm4 3v4h2v-4h-2z"/>
+            </svg>
+          </div>
+          <span class="text-[11px] font-black tracking-wider text-neutral-900">DADDESA.GITHUB.IO/WRAPBACK</span>
+        </div>
+      `;
+    }
+
+    async function getArtistImage(artistName) {
+      if (!artistName) return defaultPlaceholder;
+
+      if (artistImageCache[artistName]) {
+        return artistImageCache[artistName];
+      }
+
+      try {
+        const query = encodeURIComponent(artistName);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7000);
+
+        const res = await fetch(
+          `https://itunes.apple.com/search?term=${query}&entity=musicArtist&limit=1`,
+          {
+            signal: controller.signal,
+            mode: 'cors'
+          }
+        );
+
+        clearTimeout(timeout);
+
+        if (!res.ok) throw new Error('iTunes API error');
+
+        const data = await res.json();
+
+        let url = "";
+
+        if (
+          data.results &&
+          data.results.length &&
+          data.results[0].artworkUrl100
+        ) {
+          url = data.results[0].artworkUrl100.replace(
+            '100x100bb',
+            '600x600bb'
+          );
+        }
+
+        if (!url) {
+          const albumController = new AbortController();
+          const albumTimeout = setTimeout(
+            () => albumController.abort(),
+            7000
+          );
+
+          const resAlbum = await fetch(
+            `https://itunes.apple.com/search?term=${query}&entity=album&limit=1`,
+            {
+              signal: albumController.signal,
+              mode: 'cors'
+            }
+          );
+
+          clearTimeout(albumTimeout);
+
+          if (resAlbum.ok) {
+            const dataAlbum = await resAlbum.json();
+
+            if (
+              dataAlbum.results &&
+              dataAlbum.results.length &&
+              dataAlbum.results[0].artworkUrl100
+            ) {
+              url = dataAlbum.results[0].artworkUrl100.replace(
+                '100x100bb',
+                '600x600bb'
+              );
+            }
+          }
+        }
+
+        if (!url) {
+          artistImageCache[artistName] = defaultPlaceholder;
+          return defaultPlaceholder;
+        }
+
+        const imageController = new AbortController();
+        const imageTimeout = setTimeout(
+          () => imageController.abort(),
+          7000
+        );
+
+        const imageRes = await fetch(url, {
+          signal: imageController.signal,
+          mode: 'cors'
+        });
+
+        clearTimeout(imageTimeout);
+
+        if (!imageRes.ok) {
+          artistImageCache[artistName] = defaultPlaceholder;
+          return defaultPlaceholder;
+        }
+
+        const blob = await imageRes.blob();
+
+        if (!blob.type.startsWith('image/')) {
+          artistImageCache[artistName] = defaultPlaceholder;
+          return defaultPlaceholder;
+        }
+
+        const dataUrl = await blobToDataURL(blob);
+
+        artistImageCache[artistName] = dataUrl;
+
+        return dataUrl;
+      } catch (e) {
+        artistImageCache[artistName] = defaultPlaceholder;
+        return defaultPlaceholder;
+      }
+    }
+
+    function blobToDataURL(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function deduceGenre(artists, tracks) {
+      const topArtist = artists[0]?.toLowerCase() || "";
+
+      const dict = {
+        "bad bunny": "Latin Urban",
+        "karol g": "Latin Urban",
+        "harry styles": "Pop",
+        "fred again..": "Disco House",
+        "daft punk": "Disco House",
+        "frah quintale": "Italian Pop",
+        "green day": "Punk Rock",
+        "carl brave": "Indie Pop",
+        "tha supreme": "Italian Hip Hop",
+        "gemitaiz": "Italian Hip Hop",
+        "madman": "Italian Hip Hop",
+        "liberato": "Electronic"
+      };
+
+      if (dict[topArtist]) return dict[topArtist];
+
+      if (!artists.length) return "Pop";
+
+      try {
+        const query = encodeURIComponent(
+          `${artists[0]} ${tracks[0] || ""}`
+        );
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        const res = await fetch(
+          `https://itunes.apple.com/search?term=${query}&entity=song&limit=3`,
+          {
+            signal: controller.signal,
+            mode: 'cors'
+          }
+        );
+
+        clearTimeout(timeout);
+
+        if (!res.ok) return "Pop";
+
+        const data = await res.json();
+
+        if (data.results && data.results.length) {
+          let genre = data.results[0].primaryGenreName;
+
+          if (genre === "Latin") return "Latin Urban";
+          if (genre === "Electronic" || genre === "Dance") return "Disco House";
+          if (genre === "Alternative") return "Indie Pop";
+
+          return genre || "Pop";
+        }
+      } catch (e) {}
+
+      return "Pop";
+    }
+
+    function escapeHTML(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    btnDownload.addEventListener('click', async () => {
+      const originalHTML = btnDownload.innerHTML;
+
+      btnDownload.textContent = "Generating...";
+
+      try {
+        await document.fonts.ready;
+
+        const images = Array.from(
+          wrappedCard.querySelectorAll('img')
+        );
+
+        await Promise.all(
+          images.map(img => {
+            if (img.complete) return Promise.resolve();
+
+            return new Promise(resolve => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            });
+          })
+        );
+
+        const dataUrl = await htmlToImage.toPng(
+          wrappedCard,
+          {
+            quality: 1,
+            pixelRatio: 3,
+            cacheBust: true,
+            imagePlaceholder: defaultPlaceholder
+          }
+        );
+
+        const a = document.createElement('a');
+        a.download = 'WrapBack.png';
+        a.href = dataUrl;
+        a.click();
+      } catch (err) {
+        console.error(err);
+        alert("Error saving image");
+      } finally {
+        btnDownload.innerHTML = originalHTML;
+      }
+    });
+  </script>
+</body>
+</html>
+
+
+
+
