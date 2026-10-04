@@ -40,7 +40,7 @@ Everything else happens under the hood:
 Your listening habits are personal. Because of that, WrapBack:
 * **Has no backend or database.**
 * **Never asks for your account credentials.**
-* **Runs entirely inside your browser:** JSON files are parsed on the fly in memory and never leave your machine. You can even disconnect your Wi-Fi after opening the page and it will work just fine.
+* **Runs entirely inside your browser:** JSON files are parsed on the fly in memory and never leave your machine.
 * **100% Client-Sided!**
 
 ---
