@@ -16,7 +16,7 @@ Spotify Wrapped is great, but it has two big flaws:
 
 ## Available Designs
 
-Instead of using a generic layout, WrapBack takes inspiration from past Wrapped releases. As of now, layouts are available for the following years: **2019**, **2020**, **2023**, **2024**, **2025**.
+Instead of using a generic layout, WrapBack takes inspiration from past Wrapped releases. As of now, layouts are available for the following years: **2019**, **2020**, **2021**, **2022**, **2023**, **2024**, **2025**.
 
 ---
 
