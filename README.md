@@ -6,7 +6,7 @@
   </a>
 </p>
 
-Spotify Wrapped is great, but I believe that it has two big flaws:
+Spotify Wrapped is great, but I personally believe that it has two big flaws:
 1. It only drops once a year and vanishes from the app a few weeks later.
 2. If you want to see what you were actually listening to years ago, you have to dig through old camera roll screenshots.
 
