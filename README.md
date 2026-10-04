@@ -6,11 +6,11 @@
   </a>
 </p>
 
-Spotify Wrapped is great, but it has two big flaws:
+Spotify Wrapped is great, but I believe that it has two big flaws:
 1. It only drops once a year and vanishes from the app a few weeks later.
 2. If you want to see what you were actually listening to years ago, you have to dig through old camera roll screenshots.
 
-**WrapBack** lets you revisit those moments. Just drop in your official Spotify streaming history, and the app rebuilds your summary card with your top tracks, artists, minutes, and genre, styled around the look and feel of past years.
+**WrapBack** lets you revisit those moments. Just drop in your official Spotify streaming history, and the app rebuilds an unofficial summary card with your top tracks, artists, minutes, and genre, styled around the look and feel of past years official Spotify Wrapped.
 
 ---
 
@@ -28,8 +28,8 @@ WrapBack only asks you for two things:
 2. **Click the year** you want to view (you can also select multiple years together to see your combined stats across an entire era).
 
 Everything else happens under the hood:
-* **Accurate listening minutes**: Accounts for Spotify's historical cutoff dates (including the mid-November extension for 2023 instead of the traditional Halloween cutoff).
-* **Top Artist photo**: Automatically finds high-res artist artwork and renders it in crisp black-and-white.
+* **Accurate listening minutes**: Accounts for Spotify's historical cutoff dates.
+* **Top Artist photo**: Automatically finds high-res artist artwork.
 * **Smart genre deduction**: Analyzes your top tracks and artists to figure out your dominant genre automatically.
 * **1-click export**: Downloads a high-res 9:16 PNG (1080x1920), ready to be shared with your friends.
 
@@ -58,9 +58,9 @@ If you don't have your streaming files yet:
 
 ## Known issues and what's to come
 
-WrapBack is an independent side project built by a statistics & music enthusiast. Sadly, **I'm not a graphic designer**, so the current card designs are my best-effort recreations. They aren't 100% pixel-perfect replicas *yet*, but they capture the spirit of each year.
-To make future versions indistinguishable from the official app, the next steps are:
-* **High-Res Background Plates**: Replacing pure CSS tricks with authentic, clean background assets.
+WrapBack is an independent side project built by a statistics & music enthusiast. Sadly, **I'm not a graphic designer**, so the current card designs are my best-effort recreations. They aren't 100% pixel-perfect replicas, but they capture the spirit of each year.
+To make future versions better, the next steps are:
+* **High-Res Background Plates**: Replacing pure CSS tricks with authentic and clean background assets.
 * **Exact Typography & Alignment**: Calibrating font kerning, letter-spacing, and millimeter-precise coordinates to match the official layout grid.
 * **More Archival Years**: Adding accurate templates for the remaining Wrapped editions.
 
